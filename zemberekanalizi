@@ -1,0 +1,88 @@
+import pandas as pd
+import re
+from zemberek.morphology import TurkishMorphology
+from zemberek.morphology.analysis.word_analysis import WordAnalysis # Import for type checking if needed
+
+# --- 1. Zemberek'i Başlatma ---
+print("Zemberek TurkishMorphology başlatılıyor...")
+try:
+    morphology = TurkishMorphology.create_with_defaults()
+    print("Zemberek TurkishMorphology başarıyla başlatıldı.")
+except Exception as e:
+    print(f"Zemberek başlatılırken bir hata oluştu: {e}")
+    exit()
+
+# --- 2. VERİ YÜKLEME ---
+try:
+    train_df = pd.read_excel('train_tweets.xlsx', header=None)
+    test_df = pd.read_excel('test_tweets.xlsx', header=None)
+except FileNotFoundError:
+    print("Hata: train_tweets.xlsx veya test_tweets.xlsx bulunamadı. Dosyaların doğru yolda olduğundan emin olun.")
+    exit()
+
+train_df.columns = ['Tweet', 'Duygu']
+test_df.columns = ['Tweet', 'Duygu']
+
+# --- 3. ÖN İşleme FONKSİYONLARI (Zemberek Lemmatization ile) ---
+def text_cleaning_with_zemberek(text):
+    if not isinstance(text, str):
+        return ""
+
+    text = text.lower()
+    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'@\w+', '', text)
+    text = re.sub(r'#', '', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\d+', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    kelimeler = text.split()
+    kokler = []
+    for kelime in kelimeler:
+        analyses_raw = morphology.analyze(kelime) # This returns a java.util.List<WordAnalysis>
+
+        lemma_found = False
+        if analyses_raw: # Check if the list is not empty (or if it's a single object that's not None)
+            try:
+                # Try to iterate over analyses_raw assuming it's a list or iterable
+                # Take the first analysis that has a lemma
+                for analysis in analyses_raw:
+                    if isinstance(analysis, WordAnalysis) and analysis.getLemma():
+                        kokler.append(analysis.getLemma())
+                        lemma_found = True
+                        break # Only take the first lemma
+            except TypeError:
+                # If analyses_raw is a single WordAnalysis object and not iterable
+                if isinstance(analyses_raw, WordAnalysis) and analyses_raw.getLemma():
+                    kokler.append(analyses_raw.getLemma())
+                    lemma_found = True
+
+        if not lemma_found:
+            kokler.append(kelime) # If no lemma found or analysis failed, use original word
+
+    text = " ".join(kokler)
+    return text.strip()
+
+print("Veriler Zemberek lemmatization ile temizleniyor...")
+train_df['Cleaned_Tweet'] = train_df['Tweet'].apply(text_cleaning_with_zemberek)
+test_df['Cleaned_Tweet'] = test_df['Tweet'].apply(text_cleaning_with_zemberek)
+
+print("Örnek Temiz Veri (Zemberek Lemmatization sonrası):")
+print(train_df[['Tweet', 'Cleaned_Tweet']].head())
+
+# --- 4. ETİKETLERİ SAYISALA ÇEVİRME ---
+label_map = {'olumsuz': 0, 'notr': 1, 'olumlu': 2}
+train_df['label'] = train_df['Duygu'].map(label_map)
+test_df['label'] = test_df['Duygu'].map(label_map)
+
+# --- 5. X_train, X_test, y_train, y_test'i Hazırlama ---
+X_train = train_df['Cleaned_Tweet']
+X_test = test_df['Cleaned_Tweet']
+y_train = train_df['label']
+y_test = test_df['label']
+
+print("\nVeri hazırlığı tamamlandı.")
+print(f"X_train boyutu: {len(X_train)}")
+print(f"X_test boyutu: {len(X_test)}")
+print(f"y_train boyutu: {len(y_train)}")
+print(f"y_test boyutu: {len(y_test)}")
