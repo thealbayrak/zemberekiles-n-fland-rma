@@ -1,0 +1,147 @@
+import pandas as pd
+import re
+import numpy as np
+from zemberek.morphology import TurkishMorphology
+from zemberek.morphology.analysis.word_analysis import WordAnalysis
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# --- 1. Zemberek'i Başlatma ---
+print("Zemberek TurkishMorphology başlatılıyor...")
+try:
+    morphology = TurkishMorphology.create_with_defaults()
+    print("Zemberek TurkishMorphology başarıyla başlatıldı.")
+    zemberek_initialized = True
+except Exception as e:
+    print(f"Zemberek başlatılırken bir hata oluştu: {e}")
+    zemberek_initialized = False
+
+# --- 2. VERİ YÜKLEME ---
+data_loaded_successfully = False
+try:
+    train_df = pd.read_excel('train_tweets.xlsx', header=None)
+    test_df = pd.read_excel('test_tweets.xlsx', header=None)
+    data_loaded_successfully = True
+    print("Veriler başarıyla yüklendi.")
+except FileNotFoundError:
+    print("Hata: train_tweets.xlsx veya test_tweets.xlsx bulunamadı. Dosyaların doğru yolda olduğundan emin olun.")
+    # Create empty DataFrames to avoid NameError in subsequent checks if data not loaded
+    train_df = pd.DataFrame(columns=['Tweet', 'Duygu'])
+    test_df = pd.DataFrame(columns=['Tweet', 'Duygu'])
+    print("Boş DataFrame'ler oluşturuldu. Lütfen dosya sorununu giderin.")
+
+if data_loaded_successfully and not train_df.empty and not test_df.empty:
+    train_df.columns = ['Tweet', 'Duygu']
+    test_df.columns = ['Tweet', 'Duygu']
+
+    # --- 3. ÖN İşleme FONKSİYONLARI (Zemberek Lemmatization ile) ---
+    def text_cleaning_with_zemberek(text):
+        if not isinstance(text, str):
+            return ""
+
+        text = text.lower()
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'@\w+', '', text)
+        text = re.sub(r'#', '', text)
+        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r'\d+', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        if zemberek_initialized:
+            kelimeler = text.split()
+            kokler = []
+            for kelime in kelimeler:
+                analyses_raw = morphology.analyze(kelime)
+                lemma_found = False
+                if analyses_raw:
+                    try:
+                        for analysis in analyses_raw:
+                            if isinstance(analysis, WordAnalysis) and analysis.getLemma():
+                                kokler.append(analysis.getLemma())
+                                lemma_found = True
+                                break
+                    except TypeError:
+                        if isinstance(analyses_raw, WordAnalysis) and analyses_raw.getLemma():
+                            kokler.append(analyses_raw.getLemma())
+                            lemma_found = True
+                if not lemma_found:
+                    kokler.append(kelime)
+            text = " ".join(kokler)
+        else:
+            # print("Uyarı: Zemberek başlatılamadığı için lemmatization adımı atlandı.") # Suppress repetitive warning
+            pass
+
+        return text.strip()
+
+    print("Veriler Zemberek lemmatization ile temizleniyor...")
+    train_df['Cleaned_Tweet'] = train_df['Tweet'].apply(text_cleaning_with_zemberek)
+    test_df['Cleaned_Tweet'] = test_df['Tweet'].apply(text_cleaning_with_zemberek)
+
+    # --- 4. ETİKETLERİ SAYISALA ÇEVİRME ---
+    label_map = {'olumsuz': 0, 'notr': 1, 'olumlu': 2}
+    train_df['label'] = train_df['Duygu'].map(label_map)
+    test_df['label'] = test_df['Duygu'].map(label_map)
+
+    # --- 5. X_train, X_test, y_train, y_test'i Hazırlama ---
+    X_train = train_df['Cleaned_Tweet']
+    X_test = test_df['Cleaned_Tweet']
+    y_train = train_df['label']
+    y_test = test_df['label']
+
+    print("\nVeri hazırlığı tamamlandı.")
+
+    # --- 6. Metin Vektörleştirme (TF-IDF) ---
+    print("Metin verileri TF-IDF vektörlerine dönüştürülüyor...")
+    tfidf_vectorizer = TfidfVectorizer(max_features=5000, min_df=5, max_df=0.8)
+    X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)
+    X_test_tfidf = tfidf_vectorizer.transform(X_test)
+    print("TF-IDF vektörleştirme tamamlandı.")
+    print(f"X_train_tfidf boyutu: {X_train_tfidf.shape}")
+    print(f"X_test_tfidf boyutu: {X_test_tfidf.shape}")
+
+
+    # --- Subtask Logic: Select 5 random examples for each sentiment class from the test set and transform them into TF-IDF vectors. ---
+
+    # 1. Define a dictionary sentiment_map_reverse
+    sentiment_map_reverse = {0: 'olumsuz', 1: 'notr', 2: 'olumlu'}
+
+    # 2. Initialize an empty list called selected_examples and set num_examples_per_class
+    selected_examples = []
+    num_examples_per_class = 5
+
+    print("Seçilen örnekler hazırlanıyor...")
+
+    # 3. Iterate through each sentiment class (0, 1, 2)
+    if not y_test.empty:
+        for sentiment_label in sorted(y_test.unique()):
+            class_indices = y_test[y_test == sentiment_label].index
+
+            num_to_select = min(len(class_indices), num_examples_per_class)
+            if num_to_select > 0:
+                selected_class_indices = np.random.choice(class_indices, num_to_select, replace=False)
+
+                for idx in selected_class_indices:
+                    original_tweet = test_df.loc[idx, 'Tweet']
+                    cleaned_tweet = X_test.loc[idx]
+                    label = y_test.loc[idx]
+
+                    selected_examples.append({
+                        'original_tweet': original_tweet,
+                        'cleaned_tweet': cleaned_tweet,
+                        'label': label,
+                        'sentiment': sentiment_map_reverse[label]
+                    })
+        # 4. Create a new Pandas DataFrame, examples_df, from the selected_examples list.
+        examples_df = pd.DataFrame(selected_examples)
+
+        print("Örnek DataFrame oluşturuldu:")
+        print(examples_df.head(15))
+
+        # 5. Use the already fitted tfidf_vectorizer to transform the 'cleaned_tweet' column of examples_df
+        X_examples_tfidf = tfidf_vectorizer.transform(examples_df['cleaned_tweet'])
+
+        print("\nSeçilen örnekler TF-IDF vektörlerine dönüştürüldü.")
+        print(f"X_examples_tfidf boyutu: {X_examples_tfidf.shape}")
+    else:
+        print("Uyarı: y_test boş olduğu için örnek seçimi ve TF-IDF dönüşümü atlandı.")
+else:
+    print("Hata: Veri yüklenemediği için sonraki adımlar (ön işleme, TF-IDF, örnek seçimi) atlandı.")
