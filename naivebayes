@@ -1,0 +1,18 @@
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report, accuracy_score
+
+# Multinomial Naive Bayes modelini oluştur
+naive_bayes_model = MultinomialNB()
+
+# Modeli eğitim verisi üzerinde eğit
+print("Naive Bayes modeli eğitiliyor...")
+naive_bayes_model.fit(X_train_tfidf, y_train)
+print("Model eğitimi tamamlandı.")
+
+# Test verisi üzerinde tahmin yap
+y_pred_nb = naive_bayes_model.predict(X_test_tfidf)
+
+# Modelin performansını değerlendir
+print("\nNaive Bayes Model Performans Raporu:")
+print(classification_report(y_test, y_pred_nb))
+print(f"Naive Bayes Doğruluk Oranı (Accuracy): {accuracy_score(y_test, y_pred_nb):.4f}")
