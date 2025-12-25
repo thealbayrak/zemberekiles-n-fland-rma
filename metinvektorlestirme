@@ -1,0 +1,20 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# --- 6. Metin Vektörleştirme (TF-IDF) ---
+print("Metin verileri TF-IDF vektörlerine dönüştürülüyor...")
+
+# TF-IDF vektörleyiciyi oluştur
+# max_features: En sık geçen bu kadar kelimeyi kullan
+# min_df: Bir kelimenin en az bu kadar dokümanda geçmesi gerekir (frekans)
+# max_df: Bir kelimenin en fazla bu kadar dokümanda geçmesi gerekir (frekans)
+tfidf_vectorizer = TfidfVectorizer(max_features=5000, min_df=5, max_df=0.8)
+
+# Eğitim verisi üzerinde vektörleyiciyi eğit ve dönüştür
+X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)
+
+# Test verisini eğitilmiş vektörleyici ile dönüştür
+X_test_tfidf = tfidf_vectorizer.transform(X_test)
+
+print("TF-IDF vektörleştirme tamamlandı.")
+print(f"X_train_tfidf boyutu: {X_train_tfidf.shape}")
+print(f"X_test_tfidf boyutu: {X_test_tfidf.shape}")
