@@ -1,0 +1,19 @@
+from sklearn.svm import LinearSVC
+from sklearn.metrics import classification_report, accuracy_score
+
+# LinearSVC modelini oluştur
+# C parametresi düzenlileştirme gücünü kontrol eder.
+svm_model = LinearSVC(random_state=42, max_iter=2000) # max_iter artırılabilir
+
+# Modeli eğitim verisi üzerinde eğit
+print("LinearSVC modeli eğitiliyor...")
+svm_model.fit(X_train_tfidf, y_train)
+print("Model eğitimi tamamlandı.")
+
+# Test verisi üzerinde tahmin yap
+y_pred_svm = svm_model.predict(X_test_tfidf)
+
+# Modelin performansını değerlendir
+print("\nLinearSVC Model Performans Raporu:")
+print(classification_report(y_test, y_pred_svm))
+print(f"LinearSVC Doğruluk Oranı (Accuracy): {accuracy_score(y_test, y_pred_svm):.4f}")
