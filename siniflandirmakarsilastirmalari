@@ -1,0 +1,39 @@
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+from sklearn.naive_bayes import MultinomialNB
+
+print("Re-training models for prediction on examples...")
+
+# Re-initialize and train Logistic Regression model
+logistic_model = LogisticRegression(max_iter=1000, random_state=42)
+logistic_model.fit(X_train_tfidf, y_train)
+
+# Re-initialize and train LinearSVC model
+svm_model = LinearSVC(random_state=42, max_iter=2000)
+svm_model.fit(X_train_tfidf, y_train)
+
+# Re-initialize and train Naive Bayes model
+naive_bayes_model = MultinomialNB()
+naive_bayes_model.fit(X_train_tfidf, y_train)
+
+print("Models re-trained. Making predictions on selected examples...")
+
+# 1. Logistic Regression modeli ile tahmin yap
+examples_df['Logistic_Regression_Prediction_Num'] = logistic_model.predict(X_examples_tfidf)
+
+# 2. LinearSVC modeli ile tahmin yap
+examples_df['LinearSVC_Prediction_Num'] = svm_model.predict(X_examples_tfidf)
+
+# 3. Naive Bayes modeli ile tahmin yap
+examples_df['Naive_Bayes_Prediction_Num'] = naive_bayes_model.predict(X_examples_tfidf)
+
+# 4. Sayısal tahminleri duygu etiketlerine çevir
+examples_df['Logistic_Regression_Prediction'] = examples_df['Logistic_Regression_Prediction_Num'].map(sentiment_map_reverse)
+examples_df['LinearSVC_Prediction'] = examples_df['LinearSVC_Prediction_Num'].map(sentiment_map_reverse)
+examples_df['Naive_Bayes_Prediction'] = examples_df['Naive_Bayes_Prediction_Num'].map(sentiment_map_reverse)
+
+print("Tahminler tamamlandı.")
+
+# 5. Sonuçları tablo olarak göster
+print("\nModel Tahmin Karşılaştırma Tablosu (Seçilen Örnekler):")
+print(examples_df[['original_tweet', 'sentiment', 'Logistic_Regression_Prediction', 'LinearSVC_Prediction', 'Naive_Bayes_Prediction']].to_markdown(index=False))
